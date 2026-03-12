@@ -140,10 +140,15 @@ app.get('/api/users/me', authMiddleware, async (req, res) => {
 
 app.get('/api/users/search', authMiddleware, async (req, res) => {
   const { q } = req.query;
-  res.json(await User.find({
-    _id: { $ne: req.userId },
-    $or: [{ username: { $regex: q, $options: 'i' } }, { email: { $regex: q, $options: 'i' } }],
-  }).select('-password').limit(20));
+  // ✅ If empty query, return ALL users (for contacts list)
+  const filter = { _id: { $ne: req.userId } };
+  if (q && q.trim().length > 0) {
+    filter.$or = [
+      { username: { $regex: q, $options: 'i' } },
+      { email:    { $regex: q, $options: 'i' } },
+    ];
+  }
+  res.json(await User.find(filter).select('-password').limit(50));
 });
 
 app.get('/api/users/contacts', authMiddleware, async (req, res) => {
@@ -265,7 +270,7 @@ io.on('connection', (socket) => {
 
   socket.on('message:send', async (data) => {
     try {
-      const { senderId, receiverId, type, content, mediaUrl, fileName, fileSize, replyTo } = data;
+      const { senderId, receiverId, type, content, mediaUrl, fileName, fileSize, replyTo, tempId } = data;
       const conversationId = getConversationId(senderId, receiverId);
 
       const message = await Message.create({
